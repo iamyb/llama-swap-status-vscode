@@ -3,11 +3,12 @@
   "publisher": "iamyb",
   "displayName": "llama-swap-status",
   "description": "Display llama-swap status in VS Code status bar",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/iamyb/llama-swap-status-vscode.git"
   },
-  "version": "0.1.0",
+  "version": "0.1.1",
   "engines": {
     "vscode": "^1.125.0"
   },
@@ -30,27 +31,27 @@
     "commands": [
       {
         "command": "llamaSwap.openPanel",
-        "title": "Llama Swap: Open Monitor Panel",
+        "title": "llama-swap-status: Open Monitor Panel",
         "icon": "$(graph)"
       },
       {
         "command": "llamaSwap.openWebUI",
-        "title": "Llama Swap: Open Web UI",
+        "title": "llama-swap-status: Open Web UI",
         "icon": "$(link)"
       },
       {
         "command": "llamaSwap.toggleStatusBar",
-        "title": "Llama Swap: Toggle Status Bar",
+        "title": "llama-swap-status: Toggle Status Bar",
         "icon": "$(eye)"
       },
       {
         "command": "llamaSwap.refresh",
-        "title": "Llama Swap: Refresh",
+        "title": "llama-swap-status: Refresh",
         "icon": "$(refresh)"
       }
     ],
     "configuration": {
-      "title": "Llama Swap",
+      "title": "llama-swap-status",
       "properties": {
         "llamaSwap.url": {
           "type": "string",
@@ -98,7 +99,7 @@
         "llamaSwap.showPromptProgress": {
           "type": "boolean",
           "default": true,
-          "description": "Show prompt processing progress in the status bar"
+          "description": "Show processed token counts in the status bar"
         }
       }
     }

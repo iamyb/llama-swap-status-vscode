@@ -1,15 +1,28 @@
-# Llama Swap Status
+# llama-swap-status
 
-Display llama-swap status in VS Code status bar, including GPU temperature, model status, token generation speed, and prompt processing progress.
+Display llama-swap status in the VS Code status bar, including GPU temperature, token generation speed, and processed token counts.
 
 ## Features
 
 - **GPU Temperature**: Real-time GPU temperature display in the status bar
-- **Model Status**: Shows active model name and status (ready, starting, stopping, etc.)
-- **Token Speed**: Displays token generation speed (t/s)
-- **Prompt Progress**: Real-time prompt processing progress from llama-server slots API
+- **Model Status**: Optionally shows the active model name and status (ready, starting, stopping, etc.)
+- **Token Speed**: Displays aggregate token generation speed across active slots (t/s)
+- **Processed Tokens**: Shows prompt tokens processed during prefill, then prompt processed plus generated tokens during generation
 - **Detail Panel**: Click any status bar item to open a detailed monitoring panel
-- **Connection Status**: Shows disconnected state when llama-swap is unreachable
+- **Automatic Reconnection**: Detects llama-swap when it becomes available after startup
+
+## Status Bar Behavior
+
+The extension shows four optional items on the right side of the VS Code status bar:
+
+| Item | Display | Data source |
+| --- | --- | --- |
+| GPU | Temperature for each GPU | llama-swap `/api/performance` |
+| Model | Active model name and status | llama-swap `/v1/models` |
+| Speed | Aggregate generation speed across active slots | llama-server `/slots` |
+| Processed Tokens | Prompt tokens processed during prefill, then prompt processed plus generated tokens | llama-server `/slots` |
+
+Model information is hidden by default to preserve status bar space. Processed token information follows the most active slot, while generation speed is aggregated across all active slots. When llama-swap is unavailable, the status bar items remain hidden and reappear automatically after the server becomes available.
 
 ## Requirements
 
@@ -23,15 +36,18 @@ This extension contributes the following settings:
 * `llamaSwap.refreshInterval`: Polling interval in milliseconds (default: 3000)
 * `llamaSwap.slotsPollInterval`: Slot polling interval in milliseconds (default: 1000)
 * `llamaSwap.showGpuInfo`: Show GPU temperature in status bar (default: true)
+* `llamaSwap.showModelInfo`: Show active model name and status in status bar (default: false)
 * `llamaSwap.showSpeedInfo`: Show token speed in status bar (default: true)
-* `llamaSwap.showPromptProgress`: Show prompt progress in status bar (default: true)
+* `llamaSwap.showPromptProgress`: Show processed token counts in status bar (default: true)
+
+The `llamaSwap.statusBarPosition` setting is currently reserved for future use; status bar items are displayed on the right side.
 
 ## Commands
 
-* `Llama Swap: Open Monitor Panel` - Open detailed monitoring webview
-* `Llama Swap: Open Web UI` - Open llama-swap web interface
-* `Llama Swap: Toggle Status Bar` - Toggle status bar visibility
-* `Llama Swap: Refresh` - Manually refresh connection and data
+* `llama-swap-status: Open Monitor Panel` - Open detailed monitoring webview
+* `llama-swap-status: Open Web UI` - Open llama-swap web interface
+* `llama-swap-status: Toggle Status Bar` - Toggle status bar visibility
+* `llama-swap-status: Refresh` - Manually refresh connection and data
 
 ## Development
 
@@ -45,43 +61,8 @@ code .  # Then press F5 to debug
 
 MIT
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
 ## Release Notes
 
-Users appreciate release notes as you update your extension.
+### 0.1.0
 
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+Initial release with GPU monitoring, aggregate token generation speed, processed token counts, and llama-swap Web UI access.

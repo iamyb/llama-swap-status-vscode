@@ -114,14 +114,18 @@ export class StatusBarManager {
     const processed = activeSlot.n_prompt_tokens_processed;
     const total = activeSlot.n_prompt_tokens;
     const cached = activeSlot.n_prompt_tokens_cache;
+    const generated = activeSlot.next_token?.reduce((sum, token) => sum + token.n_decoded, 0) ?? 0;
+    const processedTotal = processed + generated;
     const percent = total > 0 ? ((processed / total) * 100).toFixed(0) : '0';
     const promptSpeed = this.slotsMonitor.getPromptSpeed();
 
-    const promptText = `${processed}`.padStart(PROMPT_FIELD_WIDTH, '0').slice(-PROMPT_FIELD_WIDTH);
+    const promptText = `${processedTotal}`.padStart(PROMPT_FIELD_WIDTH, '0').slice(-PROMPT_FIELD_WIDTH);
     this.promptItem.text = `$(pulse)${promptText}`;
     this.promptItem.color = '#4ec9b0';
     this.promptItem.tooltip = new vscode.MarkdownString(
-      `**Processed Tokens:** ${processed} / ${total} tokens (${percent}%)\n` +
+      `**Processed Prompt Tokens:** ${processed} / ${total} tokens (${percent}%)\n` +
+      `**Generated Tokens:** ${generated}\n` +
+      `**Total Processed Tokens:** ${processedTotal}\n` +
       `**Cached Tokens:** ${cached}\n` +
       `**Prompt Speed:** ${promptSpeed !== null ? `${promptSpeed.toFixed(1)} t/s` : 'N/A'}`
     );

@@ -12,10 +12,10 @@ let outputChannel: vscode.LogOutputChannel | null = null;
 
 // This method is called when your extension is activated
 export function activate(context: vscode.ExtensionContext) {
-  outputChannel = vscode.window.createOutputChannel('Llama Swap Status', { log: true });
+  outputChannel = vscode.window.createOutputChannel('llama-swap-status', { log: true });
   context.subscriptions.push(outputChannel);
 
-  outputChannel.info('=== Llama Swap Status Extension Activated ===');
+  outputChannel.info('=== llama-swap-status extension activated ===');
 
   // Initialize state management
   state = new StatusBarState(outputChannel);

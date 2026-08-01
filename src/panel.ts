@@ -46,7 +46,7 @@ export class DetailPanel {
     // Create new panel
     const panel = vscode.window.createWebviewPanel(
       'llamaSwapDetail',
-      'Llama Swap Monitor',
+      'llama-swap-status Monitor',
       vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -97,7 +97,7 @@ export class DetailPanel {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
-  <title>Llama Swap Monitor</title>
+  <title>llama-swap-status Monitor</title>
   <style>
     body {
       font-family: var(--vscode-font-family);
@@ -160,7 +160,7 @@ export class DetailPanel {
   </style>
 </head>
 <body>
-  <h1>🦙 Llama Swap Monitor</h1>
+  <h1>🦙 llama-swap-status Monitor</h1>
   
   <div class="section">
     <div class="section-title">Connection Status</div>
@@ -225,7 +225,7 @@ export class DetailPanel {
   </div>
 
   <div style="margin-top: 20px; text-align: center; color: var(--vscode-descriptionForeground); font-size: 0.9em;">
-    <a href="${webUiUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--vscode-textLink-foreground);">Open Llama Swap Web UI →</a>
+    <a href="${webUiUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--vscode-textLink-foreground);">Open llama-swap Web UI →</a>
   </div>
 </body>
 </html>`;
