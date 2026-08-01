@@ -73,7 +73,11 @@ export class StatusBarManager {
     }
 
     // Update model status item
-    this.updateModelItem();
+    if (config.showModelInfo) {
+      this.updateModelItem();
+    } else {
+      this.modelItem.hide();
+    }
 
     // Update speed item
     if (config.showSpeedInfo) {
@@ -96,6 +100,7 @@ export class StatusBarManager {
       this.promptItem.hide();
       return;
     }
+    this.promptItem.show();
 
     const activeSlot = this.slotsMonitor.getActiveSlot();
     if (!activeSlot) {
@@ -129,6 +134,7 @@ export class StatusBarManager {
       this.gpuItem.hide();
       return;
     }
+    this.gpuItem.show();
 
     const gpus = this.state.getAllGpuStats();
     if (gpus.length === 0) {
@@ -163,6 +169,7 @@ export class StatusBarManager {
       this.modelItem.hide();
       return;
     }
+    this.modelItem.show();
 
     const activeModels = this.state.getActiveModelIds();
     if (activeModels.length === 0) {
@@ -194,6 +201,7 @@ export class StatusBarManager {
       this.speedItem.hide();
       return;
     }
+    this.speedItem.show();
 
     const speed = this.slotsMonitor.getTokenSpeed();
     if (speed === null || speed === 0) {

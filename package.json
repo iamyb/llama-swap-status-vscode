@@ -1,6 +1,6 @@
 {
   "name": "llama-swap-status",
-  "displayName": "Llama Swap Status",
+  "displayName": "llama-swap-status",
   "description": "Display llama-swap status in VS Code status bar",
   "version": "0.1.0",
   "engines": {
@@ -50,7 +50,7 @@
         "llamaSwap.url": {
           "type": "string",
           "default": "http://localhost:8080",
-          "description": "URL of the llama-swap server (e.g., http://localhost:8080 or http://192.168.0.41:9292)"
+          "description": "URL of the llama-swap server (e.g., http://localhost:8080)"
         },
         "llamaSwap.refreshInterval": {
           "type": "number",
@@ -79,6 +79,11 @@
           "type": "boolean",
           "default": true,
           "description": "Show GPU temperature and utilization in the status bar"
+        },
+        "llamaSwap.showModelInfo": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show the active model name and status in the status bar"
         },
         "llamaSwap.showSpeedInfo": {
           "type": "boolean",

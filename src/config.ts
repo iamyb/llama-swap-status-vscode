@@ -6,6 +6,7 @@ export interface ExtensionConfig {
   refreshInterval: number;
   statusBarPosition: 'left' | 'right';
   showGpuInfo: boolean;
+  showModelInfo: boolean;
   showSpeedInfo: boolean;
   showPromptProgress: boolean;
   slotsPollInterval: number;
@@ -17,6 +18,7 @@ const DEFAULTS: ExtensionConfig = {
   refreshInterval: 3000,
   statusBarPosition: 'right',
   showGpuInfo: true,
+  showModelInfo: false,
   showSpeedInfo: true,
   showPromptProgress: true,
   slotsPollInterval: 1000,
@@ -30,6 +32,7 @@ export function getConfig(): ExtensionConfig {
     refreshInterval: config.get<number>('refreshInterval', DEFAULTS.refreshInterval),
     statusBarPosition: config.get<'left' | 'right'>('statusBarPosition', DEFAULTS.statusBarPosition),
     showGpuInfo: config.get<boolean>('showGpuInfo', DEFAULTS.showGpuInfo),
+    showModelInfo: config.get<boolean>('showModelInfo', DEFAULTS.showModelInfo),
     showSpeedInfo: config.get<boolean>('showSpeedInfo', DEFAULTS.showSpeedInfo),
     showPromptProgress: config.get<boolean>('showPromptProgress', DEFAULTS.showPromptProgress),
     slotsPollInterval: config.get<number>('slotsPollInterval', DEFAULTS.slotsPollInterval),
