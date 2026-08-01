@@ -61,7 +61,6 @@ export class DetailPanel {
   private updateContent(): void {
     const gpuStats = this.state.getAllGpuStats();
     const tokenSpeed = this.slotsMonitor.getTokenSpeed();
-    const promptSpeed = this.slotsMonitor.getPromptSpeed();
     const activeSlot = this.slotsMonitor.getActiveSlot();
     const activeModels = this.state.getActiveModelIds();
     const inflightCount = this.slotsMonitor.getInflightCount();
@@ -69,7 +68,6 @@ export class DetailPanel {
     const html = this.generateHtml({
       gpuStats,
       tokenSpeed,
-      promptSpeed,
       activeSlot,
       activeModels,
       inflightCount,
@@ -83,7 +81,6 @@ export class DetailPanel {
   private generateHtml(data: {
     gpuStats: { temp_c: number; gpu_util_pct: number; mem_used_mb: number; mem_total_mb: number; id?: number }[];
     tokenSpeed: number | null;
-    promptSpeed: number | null;
     activeSlot: { is_processing: boolean; n_prompt_tokens: number; n_prompt_tokens_processed: number; n_prompt_tokens_cache: number } | null;
     activeModels: string[];
     inflightCount: number;
@@ -92,6 +89,7 @@ export class DetailPanel {
     const progressPercent = data.activeSlot
       ? (data.activeSlot.n_prompt_tokens_processed / data.activeSlot.n_prompt_tokens) * 100
       : 0;
+    const webUiUrl = escapeHtml(getBaseUrl());
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -198,33 +196,20 @@ export class DetailPanel {
       <span class="metric-label">Token Generation</span>
       <span class="metric-value" style="color: ${data.tokenSpeed !== null ? '#4ec9b0' : '#808080'}">${data.tokenSpeed !== null ? `${data.tokenSpeed.toFixed(1)} t/s` : 'Idle'}</span>
     </div>
-    <div class="metric">
-      <span class="metric-label">Prompt Processing</span>
-      <span class="metric-value" style="color: ${data.promptSpeed !== null ? '#4ec9b0' : '#808080'}">${data.promptSpeed !== null ? `${data.promptSpeed.toFixed(1)} t/s` : 'Idle'}</span>
-    </div>
-    <div style="font-size: 0.85em; color: #808080; margin-top: 8px;">💡 Speed shown during active processing</div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">📝 Prompt Progress</div>
     ${data.activeSlot ? `
       <div class="metric">
-        <span class="metric-label">Progress</span>
-        <span class="metric-value">${data.activeSlot.n_prompt_tokens_processed} / ${data.activeSlot.n_prompt_tokens} tokens</span>
+        <span class="metric-label">Processed Tokens</span>
+        <span class="metric-value">${data.activeSlot.n_prompt_tokens_processed} / ${data.activeSlot.n_prompt_tokens}</span>
       </div>
       <div class="metric">
-        <span class="metric-label">Cached</span>
-        <span class="metric-value">${data.activeSlot.n_prompt_tokens_cache} tokens</span>
+        <span class="metric-label">Cached Tokens</span>
+        <span class="metric-value">${data.activeSlot.n_prompt_tokens_cache}</span>
       </div>
       <div class="progress-bar">
         <div class="progress-fill" style="width: ${progressPercent}%"></div>
       </div>
-    ` : `
-      <div class="metric">
-        <span class="metric-label">Status</span>
-        <span class="metric-value">No active processing</span>
-      </div>
-    `}
+    ` : ''}
+    <div style="font-size: 0.85em; color: #808080; margin-top: 8px;">💡 Speed shown during active processing</div>
   </div>
 
   <div class="section">
@@ -240,21 +225,8 @@ export class DetailPanel {
   </div>
 
   <div style="margin-top: 20px; text-align: center; color: var(--vscode-descriptionForeground); font-size: 0.9em;">
-    <a href="#" onclick="openWebUI()" style="color: var(--vscode-textLink-foreground);">Open Llama Swap Web UI →</a>
+    <a href="${webUiUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--vscode-textLink-foreground);">Open Llama Swap Web UI →</a>
   </div>
-
-  <script>
-    const vscode = acquireVsCodeApi();
-    function openWebUI() {
-      vscode.postMessage({ command: 'openWebUI' });
-    }
-    window.addEventListener('message', event => {
-      const message = event.data;
-      if (message.command === 'openWebUI') {
-        vscode.postMessage({ command: 'openWebUI' });
-      }
-    });
-  </script>
 </body>
 </html>`;
   }
@@ -276,4 +248,15 @@ export class DetailPanel {
       }
     }
   }
+}
+
+/** Escape a configured URL before placing it in an HTML attribute. */
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, character => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character] ?? character);
 }

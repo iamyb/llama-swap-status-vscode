@@ -20,11 +20,14 @@ export class SlotsMonitor {
   private activeSlot: SlotState | null = null;
   private callbacks: SlotChangeCallback[] = [];
 
-  // Speed tracking state
-  private prevProcessedTokens: number = 0;
-  private prevDecodedTokens: number = 0;
+  // Speed tracking state (aggregated across all slots)
+  private prevTotalProcessedTokens: number = 0;
+  private prevTotalDecodedTokens: number = 0;
   private prevTimestamp: number = 0;
   private speedMetrics: SpeedMetrics = { promptSpeed: null, generationSpeed: null };
+  private _promptIdleSince: number = 0;
+  private _genIdleSince: number = 0;
+  private pollInProgress: boolean = false;
 
   // Inflight count (number of slots currently processing)
   private inflightCount: number = 0;
@@ -50,11 +53,17 @@ export class SlotsMonitor {
 
   /** Set the current model ID to monitor */
   setModelId(modelId: string | null): void {
+    if (modelId === this.currentModelId) {
+      return;
+    }
+
     this.currentModelId = modelId;
     // Reset speed tracking when model changes
-    this.prevProcessedTokens = 0;
-    this.prevDecodedTokens = 0;
+    this.prevTotalProcessedTokens = 0;
+    this.prevTotalDecodedTokens = 0;
     this.prevTimestamp = 0;
+    this._promptIdleSince = 0;
+    this._genIdleSince = 0;
     this.speedMetrics = { promptSpeed: null, generationSpeed: null };
     this.outputChannel.info(`[slots] Monitoring model: ${modelId ?? 'none'}`);
   }
@@ -98,6 +107,21 @@ export class SlotsMonitor {
 
   /** Poll slot states from the upstream llama-server */
   private async poll(): Promise<void> {
+    // Do not allow a slow request to overlap the next poll and corrupt deltas.
+    if (this.pollInProgress) {
+      return;
+    }
+    this.pollInProgress = true;
+
+    try {
+      await this.pollOnce();
+    } finally {
+      this.pollInProgress = false;
+    }
+  }
+
+  /** Process one ordered slot-state response. */
+  private async pollOnce(): Promise<void> {
     if (!this.currentModelId) {
       if (this.activeSlot !== null) {
         this.activeSlot = null;
@@ -115,7 +139,13 @@ export class SlotsMonitor {
     // Count inflight requests (slots that are actively processing)
     this.inflightCount = slotsResponse.filter(slot => slot.is_processing).length;
 
-    // Find the most active slot: prefer is_processing=true, fallback to slot with most decoded tokens
+    // Aggregate token counts across ALL slots for speed calculation
+    const totalProcessedTokens = slotsResponse.reduce((sum, slot) => sum + slot.n_prompt_tokens_processed, 0);
+    const totalDecodedTokens = slotsResponse.reduce((sum, slot) => {
+      return sum + (slot.next_token?.reduce((s, t) => s + t.n_decoded, 0) ?? 0);
+    }, 0);
+
+    // Find the most active slot for prompt progress display
     const activeSlot = slotsResponse.find(slot => slot.is_processing)
       ?? slotsResponse.reduce((best, slot) => {
         const decoded = slot.next_token?.reduce((sum, t) => sum + t.n_decoded, 0) ?? 0;
@@ -123,50 +153,50 @@ export class SlotsMonitor {
       }, { slot: slotsResponse[0], decoded: -1 }).slot;
 
     const now = Date.now();
-    const processedTokens = activeSlot.n_prompt_tokens_processed;
-    const decodedTokens = activeSlot.next_token?.reduce((sum, t) => sum + t.n_decoded, 0) ?? 0;
+    const isProcessing = this.inflightCount > 0;
 
-    // Calculate speeds from deltas
+    // Calculate speeds from aggregated deltas (stable across slot switches)
     if (this.prevTimestamp > 0) {
       const dt = (now - this.prevTimestamp) / 1000; // seconds
       if (dt > 0) {
-        const promptDelta = processedTokens - this.prevProcessedTokens;
-        const genDelta = decodedTokens - this.prevDecodedTokens;
+        const promptDelta = totalProcessedTokens - this.prevTotalProcessedTokens;
+        const genDelta = totalDecodedTokens - this.prevTotalDecodedTokens;
 
-        // If prompt tokens are being processed
+        // Prompt speed: tracks independently
         if (promptDelta > 0) {
           this.speedMetrics.promptSpeed = promptDelta / dt;
+          this._promptIdleSince = 0;
           this.outputChannel.info(`[slots] Prompt speed: ${this.speedMetrics.promptSpeed.toFixed(1)} t/s (delta: ${promptDelta} tokens in ${dt.toFixed(2)}s)`);
+        } else {
+          this._promptIdleSince += dt;
+          if (this._promptIdleSince >= 2) {
+            this.speedMetrics.promptSpeed = null;
+          }
         }
-        // If tokens are being generated
+
+        // Generation speed: tracks independently
         if (genDelta > 0) {
           this.speedMetrics.generationSpeed = genDelta / dt;
+          this._genIdleSince = 0;
           this.outputChannel.info(`[slots] Gen speed: ${this.speedMetrics.generationSpeed.toFixed(1)} t/s (delta: ${genDelta} tokens in ${dt.toFixed(2)}s)`);
-        }
-        // If nothing changed for a while, clear speeds and mark as idle
-        if (promptDelta === 0 && genDelta === 0) {
-          const idleSeconds = (now - this.prevTimestamp) / 1000;
-          if (idleSeconds > 3) {
-            this.speedMetrics.promptSpeed = null;
+        } else {
+          this._genIdleSince += dt;
+          // Only clear generation speed when truly idle (no slot processing AND no gen tokens for 2s)
+          if (this._genIdleSince >= 2 && !isProcessing) {
             this.speedMetrics.generationSpeed = null;
           }
         }
       }
     }
 
-    this.prevProcessedTokens = processedTokens;
-    this.prevDecodedTokens = decodedTokens;
+    this.prevTotalProcessedTokens = totalProcessedTokens;
+    this.prevTotalDecodedTokens = totalDecodedTokens;
     this.prevTimestamp = now;
 
-    // Only set activeSlot if there's actual activity (processing or recent speed data)
-    const hasActivity = activeSlot.is_processing
-      || this.speedMetrics.promptSpeed !== null
-      || this.speedMetrics.generationSpeed !== null;
-
-    if (hasActivity) {
+    // activeSlot follows processing state, not speed (prevents flicker)
+    if (isProcessing) {
       this.activeSlot = activeSlot;
-    } else if (this.activeSlot !== null) {
-      // Was active before but now idle - clear after timeout
+    } else if (!isProcessing && this._genIdleSince >= 2) {
       this.activeSlot = null;
     }
 

@@ -14,6 +14,10 @@ const STATUS_COLORS: Record<ModelStatus, string> = {
   unknown: '#c586c0',
 };
 
+// Keep status bar values made from visible characters; trailing whitespace is not reliable.
+const PROMPT_FIELD_WIDTH = 6;
+const SPEED_FIELD_WIDTH = 5;
+
 /** Status bar manager */
 export class StatusBarManager {
   private gpuItem: vscode.StatusBarItem;
@@ -29,20 +33,16 @@ export class StatusBarManager {
     this.slotsMonitor = slotsMonitor;
     this.outputChannel = outputChannel;
 
-    this.gpuItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    this.modelItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
-    this.speedItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 98);
-    this.promptItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 97);
+    this.gpuItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1000);
+    this.modelItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 999);
+    this.speedItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 998);
+    this.promptItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 997);
 
-    // Set initial text so items are visible immediately
-    this.gpuItem.text = '$(cpu-temperature) Connecting...';
-    this.gpuItem.color = '#808080';
-    this.modelItem.text = '$(loading~spin) Connecting...';
-    this.modelItem.color = '#808080';
-    this.speedItem.text = '$(beaker) ...';
-    this.speedItem.color = '#808080';
-    this.promptItem.text = '$(pulse) ...';
-    this.promptItem.color = '#808080';
+    // Keep the status bar silent until the first successful connection.
+    this.gpuItem.text = '';
+    this.modelItem.text = '';
+    this.speedItem.text = '';
+    this.promptItem.text = '';
   }
 
   /** Show all status bar items */
@@ -99,7 +99,8 @@ export class StatusBarManager {
 
     const activeSlot = this.slotsMonitor.getActiveSlot();
     if (!activeSlot) {
-      this.promptItem.text = '$(pulse) Idle';
+      const promptText = '000000';
+      this.promptItem.text = `$(pulse)${promptText}`;
       this.promptItem.color = '#808080';
       this.promptItem.tooltip = new vscode.MarkdownString('No active prompt processing');
       return;
@@ -111,10 +112,11 @@ export class StatusBarManager {
     const percent = total > 0 ? ((processed / total) * 100).toFixed(0) : '0';
     const promptSpeed = this.slotsMonitor.getPromptSpeed();
 
-    this.promptItem.text = `$(book) ${processed}/${total} (${percent}%)`;
+    const promptText = `${processed}`.padStart(PROMPT_FIELD_WIDTH, '0').slice(-PROMPT_FIELD_WIDTH);
+    this.promptItem.text = `$(pulse)${promptText}`;
     this.promptItem.color = '#4ec9b0';
     this.promptItem.tooltip = new vscode.MarkdownString(
-      `**Prompt Progress:** ${processed} / ${total} tokens (${percent}%)\n` +
+      `**Processed Tokens:** ${processed} / ${total} tokens (${percent}%)\n` +
       `**Cached Tokens:** ${cached}\n` +
       `**Prompt Speed:** ${promptSpeed !== null ? `${promptSpeed.toFixed(1)} t/s` : 'N/A'}`
     );
@@ -124,10 +126,7 @@ export class StatusBarManager {
   /** Update GPU temperature status bar item */
   private updateGpuItem(): void {
     if (!this.state.connected) {
-      this.gpuItem.text = '$(circle-slash) llama-swap: disconnected';
-      this.gpuItem.color = '#f44747';
-      this.gpuItem.tooltip = new vscode.MarkdownString('llama-swap connection failed. Click to retry.');
-      this.gpuItem.command = 'llamaSwap.refresh';
+      this.gpuItem.hide();
       return;
     }
 
@@ -198,13 +197,14 @@ export class StatusBarManager {
 
     const speed = this.slotsMonitor.getTokenSpeed();
     if (speed === null || speed === 0) {
-      this.speedItem.text = '$(beaker) Idle';
+      this.speedItem.text = `$(beaker)${'0.0'.padStart(SPEED_FIELD_WIDTH, '0')}`;
       this.speedItem.color = '#808080';
-      this.speedItem.tooltip = new vscode.MarkdownString('No active generation (speed shown when a prompt is being processed)');
+      this.speedItem.tooltip = new vscode.MarkdownString('Generation idle');
       return;
     }
 
-    this.speedItem.text = `$(beaker) ${speed.toFixed(1)} t/s`;
+    const speedStr = speed.toFixed(1).padStart(SPEED_FIELD_WIDTH, '0').slice(-SPEED_FIELD_WIDTH);
+    this.speedItem.text = `$(beaker)${speedStr}`;
     this.speedItem.color = '#4ec9b0';
     this.speedItem.tooltip = new vscode.MarkdownString(
       `**Token Generation Speed:** ${speed.toFixed(1)} tokens/sec\n` +
