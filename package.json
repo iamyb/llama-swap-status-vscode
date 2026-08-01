@@ -1,5 +1,6 @@
 {
   "name": "llama-swap-status",
+  "publisher": "iamyb",
   "displayName": "llama-swap-status",
   "description": "Display llama-swap status in VS Code status bar",
   "version": "0.1.0",
