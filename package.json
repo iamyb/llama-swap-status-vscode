@@ -3,6 +3,10 @@
   "publisher": "iamyb",
   "displayName": "llama-swap-status",
   "description": "Display llama-swap status in VS Code status bar",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iamyb/llama-swap-status-vscode.git"
+  },
   "version": "0.1.0",
   "engines": {
     "vscode": "^1.125.0"
