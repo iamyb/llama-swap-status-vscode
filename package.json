@@ -1,0 +1,129 @@
+{
+  "name": "llama-swap-status",
+  "displayName": "Llama Swap Status",
+  "description": "Display llama-swap status in VS Code status bar",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.125.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "keywords": [
+    "llama",
+    "llama-swap",
+    "llama.cpp",
+    "gpu",
+    "status",
+    "monitor"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "llamaSwap.openPanel",
+        "title": "Llama Swap: Open Monitor Panel",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "llamaSwap.openWebUI",
+        "title": "Llama Swap: Open Web UI",
+        "icon": "$(link)"
+      },
+      {
+        "command": "llamaSwap.toggleStatusBar",
+        "title": "Llama Swap: Toggle Status Bar",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "llamaSwap.refresh",
+        "title": "Llama Swap: Refresh",
+        "icon": "$(refresh)"
+      }
+    ],
+    "configuration": {
+      "title": "Llama Swap",
+      "properties": {
+        "llamaSwap.url": {
+          "type": "string",
+          "default": "http://localhost:8080",
+          "description": "URL of the llama-swap server (e.g., http://localhost:8080 or http://192.168.0.41:9292)"
+        },
+        "llamaSwap.refreshInterval": {
+          "type": "number",
+          "default": 3000,
+          "minimum": 500,
+          "maximum": 30000,
+          "description": "Interval in milliseconds to poll for performance and activity data"
+        },
+        "llamaSwap.slotsPollInterval": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 200,
+          "maximum": 10000,
+          "description": "Interval in milliseconds to poll llama-server slot states for prompt progress"
+        },
+        "llamaSwap.statusBarPosition": {
+          "type": "string",
+          "enum": [
+            "left",
+            "right"
+          ],
+          "default": "right",
+          "description": "Position of the status bar items"
+        },
+        "llamaSwap.showGpuInfo": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show GPU temperature and utilization in the status bar"
+        },
+        "llamaSwap.showSpeedInfo": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show token generation speed in the status bar"
+        },
+        "llamaSwap.showPromptProgress": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show prompt processing progress in the status bar"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "24.x",
+    "@types/vscode": "^1.125.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.0.0",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.5.0",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.1"
+  },
+  "overrides": {
+    "diff": "^8.0.4",
+    "serialize-javascript": "^7.0.6"
+  },
+  "dependencies": {
+    "eventsource": "^4.1.0"
+  }
+}
