@@ -41,9 +41,15 @@ export async function fetchSlots(modelId: string): Promise<SlotsResponse | null>
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
     const data = await response.json() as unknown;
-    // API returns array directly: [SlotState, ...]
+    // API versions may return either [SlotState, ...] or { value: [SlotState, ...] }.
     if (Array.isArray(data)) {
       return data as SlotsResponse;
+    }
+    if (typeof data === 'object' && data !== null && 'value' in data) {
+      const value = (data as { value?: unknown }).value;
+      if (Array.isArray(value)) {
+        return value as SlotsResponse;
+      }
     }
     return null;
   } catch (error) {
