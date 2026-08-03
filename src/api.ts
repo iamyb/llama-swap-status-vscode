@@ -1,4 +1,4 @@
-import { PerformanceResponse, ActivityLogEntry, SlotsResponse, ModelsResponse } from './types';
+import { PerformanceResponse, ActivityLogEntry, SlotsResponse, ModelsResponse, RunningResponse } from './types';
 import { getBaseUrl } from './config';
 import { EventSource } from 'eventsource';
 
@@ -33,10 +33,10 @@ export async function fetchActivity(limit: number = 5): Promise<ActivityLogEntry
 }
 
 /** Fetch slot states from llama-server via llama-swap proxy */
-export async function fetchSlots(modelId: string): Promise<SlotsResponse | null> {
+export async function fetchSlots(modelId: string, signal?: AbortSignal): Promise<SlotsResponse | null> {
   const baseUrl = getBaseUrl();
   try {
-    const response = await fetch(`${baseUrl}/upstream/${modelId}/slots`);
+    const response = await fetch(`${baseUrl}/upstream/${modelId}/slots`, { signal });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
@@ -53,7 +53,28 @@ export async function fetchSlots(modelId: string): Promise<SlotsResponse | null>
     }
     return null;
   } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return null;
+    }
     console.error(`[llama-swap] Failed to fetch slots for ${modelId}:`, error);
+    return null;
+  }
+}
+
+/** Fetch models that are currently running without routing through an upstream. */
+export async function fetchRunning(signal?: AbortSignal): Promise<RunningResponse | null> {
+  const baseUrl = getBaseUrl();
+  try {
+    const response = await fetch(`${baseUrl}/running`, { signal });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    return await response.json() as RunningResponse;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return null;
+    }
+    console.error('[llama-swap] Failed to fetch running models:', error);
     return null;
   }
 }

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SlotState } from './types';
-import { fetchSlots } from './api';
+import { fetchRunning, fetchSlots } from './api';
 import { getConfig } from './config';
 
 /** Callback for slot state changes */
@@ -28,6 +28,9 @@ export class SlotsMonitor {
   private _promptIdleSince: number = 0;
   private _genIdleSince: number = 0;
   private pollInProgress: boolean = false;
+  private modelGeneration: number = 0;
+  private slotsAbortController: AbortController | null = null;
+  private cooldownUntil: Map<string, number> = new Map();
 
   // Inflight count (number of slots currently processing)
   private inflightCount: number = 0;
@@ -58,13 +61,11 @@ export class SlotsMonitor {
     }
 
     this.currentModelId = modelId;
+    this.modelGeneration++;
+    this.slotsAbortController?.abort();
+    this.slotsAbortController = null;
     // Reset speed tracking when model changes
-    this.prevTotalProcessedTokens = 0;
-    this.prevTotalDecodedTokens = 0;
-    this.prevTimestamp = 0;
-    this._promptIdleSince = 0;
-    this._genIdleSince = 0;
-    this.speedMetrics = { promptSpeed: null, generationSpeed: null };
+    this.resetTracking();
     this.outputChannel.info(`[slots] Monitoring model: ${modelId ?? 'none'}`);
   }
 
@@ -81,7 +82,12 @@ export class SlotsMonitor {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
     }
+    this.modelGeneration++;
+    this.slotsAbortController?.abort();
+    this.slotsAbortController = null;
     this.activeSlot = null;
+    this.inflightCount = 0;
+    this.resetTracking();
     this.notify();
   }
 
@@ -122,17 +128,41 @@ export class SlotsMonitor {
 
   /** Process one ordered slot-state response. */
   private async pollOnce(): Promise<void> {
-    if (!this.currentModelId) {
-      if (this.activeSlot !== null) {
-        this.activeSlot = null;
-        this.speedMetrics = { promptSpeed: null, generationSpeed: null };
-        this.notify();
-      }
+    const modelId = this.currentModelId;
+    const generation = this.modelGeneration;
+    if (!modelId) {
+      this.clearActiveState();
       return;
     }
 
-    const slotsResponse = await fetchSlots(this.currentModelId);
+    const cooldownNow = Date.now();
+    if ((this.cooldownUntil.get(modelId) ?? 0) > cooldownNow) {
+      return;
+    }
+
+    // /slots can cause llama-swap to load the requested model, so check /running first.
+    const running = await fetchRunning();
+    if (generation !== this.modelGeneration || modelId !== this.currentModelId) {
+      return;
+    }
+
+    const runningModel = running?.running.find(entry => entry.model === modelId);
+    if (!runningModel || (runningModel.state !== 'ready' && runningModel.state !== 'starting')) {
+      this.outputChannel.info(`[slots] Skipping ${modelId}: model is not running`);
+      this.clearActiveState();
+      return;
+    }
+
+    this.slotsAbortController = new AbortController();
+    const slotsResponse = await fetchSlots(modelId, this.slotsAbortController.signal);
+    this.slotsAbortController = null;
+    if (generation !== this.modelGeneration || modelId !== this.currentModelId) {
+      return;
+    }
     if (!slotsResponse || slotsResponse.length === 0) {
+      this.cooldownUntil.set(modelId, Date.now() + 5000);
+      this.outputChannel.info(`[slots] Cooling down ${modelId} after slots request failure`);
+      this.clearActiveState();
       return;
     }
 
@@ -201,5 +231,27 @@ export class SlotsMonitor {
     }
 
     this.notify();
+  }
+
+  private resetTracking(): void {
+    this.prevTotalProcessedTokens = 0;
+    this.prevTotalDecodedTokens = 0;
+    this.prevTimestamp = 0;
+    this._promptIdleSince = 0;
+    this._genIdleSince = 0;
+    this.speedMetrics = { promptSpeed: null, generationSpeed: null };
+  }
+
+  private clearActiveState(): void {
+    const hadState = this.activeSlot !== null
+      || this.inflightCount !== 0
+      || this.speedMetrics.promptSpeed !== null
+      || this.speedMetrics.generationSpeed !== null;
+    this.activeSlot = null;
+    this.inflightCount = 0;
+    this.resetTracking();
+    if (hadState) {
+      this.notify();
+    }
   }
 }

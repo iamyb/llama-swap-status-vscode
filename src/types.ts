@@ -71,6 +71,14 @@ export interface ModelsResponse {
   data: ModelEntry[];
 }
 
+/** Response from llama-swap /running */
+export interface RunningResponse {
+  running: Array<{
+    model: string;
+    state: string;
+  }>;
+}
+
 /** Activity log entry from /api/activity */
 export interface ActivityLogEntry {
   id: string;

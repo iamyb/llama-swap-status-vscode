@@ -14,6 +14,7 @@ export class StatusBarState {
 
   // Model information
   public models: Map<string, ModelInfo> = new Map();
+  private loadedModelIds: Set<string> = new Set();
 
   // In-flight request count
   public inflightCount: number = 0;
@@ -94,12 +95,19 @@ export class StatusBarState {
 
       // Update models from /v1/models API
       if (models && models.data) {
+        const currentModels = new Map<string, ModelInfo>();
+        const currentLoadedModelIds = new Set<string>();
         for (const modelEntry of models.data) {
           const loadStatus = modelEntry.status?.value;
           // Map 'loaded'/'unloaded' to our internal status
           const internalStatus: ModelStatus = loadStatus === 'loaded' ? 'ready' : 'stopped';
-          this.models.set(modelEntry.id, { id: modelEntry.id, status: internalStatus });
+          currentModels.set(modelEntry.id, { id: modelEntry.id, status: internalStatus });
+          if (loadStatus === 'loaded') {
+            currentLoadedModelIds.add(modelEntry.id);
+          }
         }
+        this.models = currentModels;
+        this.loadedModelIds = currentLoadedModelIds;
         this.outputChannel.info(`[state] Loaded ${models.data.length} models from /v1/models`);
       }
 
@@ -121,9 +129,19 @@ export class StatusBarState {
         this.outputChannel.info(`[state] Event: ${eventType}`, data);
 
         if (eventType === 'model_status' && typeof data === 'object' && data !== null) {
-          const modelData = data as { id?: string; status?: ModelStatus };
-          if (modelData.id && modelData.status) {
+          const event = data as {
+            id?: string;
+            status?: ModelStatus;
+            data?: { id?: string; status?: ModelStatus };
+          };
+          const modelData = event.data ?? event;
+          if (modelData.id && modelData.status && this.models.has(modelData.id)
+            && (modelData.status !== 'ready' || this.loadedModelIds.has(modelData.id))) {
             this.models.set(modelData.id, { id: modelData.id, status: modelData.status });
+            if (modelData.status === 'stopping' || modelData.status === 'stopped'
+              || modelData.status === 'shutdown') {
+              this.loadedModelIds.delete(modelData.id);
+            }
             this.notify();
           }
         }
@@ -166,7 +184,7 @@ export class StatusBarState {
   getActiveModelIds(): string[] {
     const active: string[] = [];
     for (const [id, model] of this.models) {
-      if (model.status === 'ready' || model.status === 'starting') {
+      if ((model.status === 'ready' || model.status === 'starting') && this.loadedModelIds.has(id)) {
         active.push(id);
       }
     }
