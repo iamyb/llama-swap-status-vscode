@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SlotState } from './types';
-import { fetchRunning, fetchSlots } from './api';
+import { fetchMetricsStats, fetchRunning } from './api';
 import { getConfig } from './config';
 
 /** Callback for slot state changes */
@@ -16,24 +16,18 @@ interface SpeedMetrics {
 export class SlotsMonitor {
   private pollTimer: NodeJS.Timeout | null = null;
   private outputChannel: vscode.LogOutputChannel;
-  private currentModelId: string | null = null;
   private activeSlot: SlotState | null = null;
   private callbacks: SlotChangeCallback[] = [];
 
-  // Speed tracking state (aggregated across all slots)
-  private prevTotalProcessedTokens: number = 0;
-  private prevTotalDecodedTokens: number = 0;
+  // Speed tracking state (aggregated across all models)
+  private prevTotalInputTokens: number = 0;
+  private prevTotalOutputTokens: number = 0;
   private prevTimestamp: number = 0;
   private speedMetrics: SpeedMetrics = { promptSpeed: null, generationSpeed: null };
   private _promptIdleSince: number = 0;
   private _genIdleSince: number = 0;
   private pollInProgress: boolean = false;
-  private modelGeneration: number = 0;
-  private slotsAbortController: AbortController | null = null;
-  private cooldownUntil: Map<string, number> = new Map();
-
-  // Inflight count (number of slots currently processing)
-  private inflightCount: number = 0;
+  private runningModelCount: number = 0;
 
   constructor(outputChannel: vscode.LogOutputChannel) {
     this.outputChannel = outputChannel;
@@ -54,21 +48,6 @@ export class SlotsMonitor {
     }
   }
 
-  /** Set the current model ID to monitor */
-  setModelId(modelId: string | null): void {
-    if (modelId === this.currentModelId) {
-      return;
-    }
-
-    this.currentModelId = modelId;
-    this.modelGeneration++;
-    this.slotsAbortController?.abort();
-    this.slotsAbortController = null;
-    // Reset speed tracking when model changes
-    this.resetTracking();
-    this.outputChannel.info(`[slots] Monitoring model: ${modelId ?? 'none'}`);
-  }
-
   /** Start polling slot states */
   start(): void {
     this.poll();
@@ -82,11 +61,8 @@ export class SlotsMonitor {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
     }
-    this.modelGeneration++;
-    this.slotsAbortController?.abort();
-    this.slotsAbortController = null;
     this.activeSlot = null;
-    this.inflightCount = 0;
+    this.runningModelCount = 0;
     this.resetTracking();
     this.notify();
   }
@@ -108,10 +84,15 @@ export class SlotsMonitor {
 
   /** Get the current inflight request count (number of slots actively processing) */
   getInflightCount(): number {
-    return this.inflightCount;
+    return 0;
   }
 
-  /** Poll slot states from the upstream llama-server */
+  /** Get the number of models currently running */
+  getRunningModelCount(): number {
+    return this.runningModelCount;
+  }
+
+  /** Poll aggregate statistics without querying a model upstream */
   private async poll(): Promise<void> {
     // Do not allow a slow request to overlap the next poll and corrupt deltas.
     if (this.pollInProgress) {
@@ -126,77 +107,28 @@ export class SlotsMonitor {
     }
   }
 
-  /** Process one ordered slot-state response. */
+  /** Process one ordered aggregate-statistics response. */
   private async pollOnce(): Promise<void> {
-    const modelId = this.currentModelId;
-    const generation = this.modelGeneration;
-    if (!modelId) {
+    const [stats, running] = await Promise.all([fetchMetricsStats(), fetchRunning()]);
+    if (!stats) {
       this.clearActiveState();
       return;
     }
-
-    const cooldownNow = Date.now();
-    if ((this.cooldownUntil.get(modelId) ?? 0) > cooldownNow) {
-      return;
-    }
-
-    // /slots can cause llama-swap to load the requested model, so check /running first.
-    const running = await fetchRunning();
-    if (generation !== this.modelGeneration || modelId !== this.currentModelId) {
-      return;
-    }
-
-    const runningModel = running?.running.find(entry => entry.model === modelId);
-    if (!runningModel || (runningModel.state !== 'ready' && runningModel.state !== 'starting')) {
-      this.outputChannel.info(`[slots] Skipping ${modelId}: model is not running`);
-      this.clearActiveState();
-      return;
-    }
-
-    this.slotsAbortController = new AbortController();
-    const slotsResponse = await fetchSlots(modelId, this.slotsAbortController.signal);
-    this.slotsAbortController = null;
-    if (generation !== this.modelGeneration || modelId !== this.currentModelId) {
-      return;
-    }
-    if (!slotsResponse || slotsResponse.length === 0) {
-      this.cooldownUntil.set(modelId, Date.now() + 5000);
-      this.outputChannel.info(`[slots] Cooling down ${modelId} after slots request failure`);
-      this.clearActiveState();
-      return;
-    }
-
-    // Count inflight requests (slots that are actively processing)
-    this.inflightCount = slotsResponse.filter(slot => slot.is_processing).length;
-
-    // Aggregate token counts across ALL slots for speed calculation
-    const totalProcessedTokens = slotsResponse.reduce((sum, slot) => sum + slot.n_prompt_tokens_processed, 0);
-    const totalDecodedTokens = slotsResponse.reduce((sum, slot) => {
-      return sum + (slot.next_token?.reduce((s, t) => s + t.n_decoded, 0) ?? 0);
-    }, 0);
-
-    // Find the most active slot for prompt progress display
-    const activeSlot = slotsResponse.find(slot => slot.is_processing)
-      ?? slotsResponse.reduce((best, slot) => {
-        const decoded = slot.next_token?.reduce((sum, t) => sum + t.n_decoded, 0) ?? 0;
-        return decoded > best.decoded ? { slot, decoded } : best;
-      }, { slot: slotsResponse[0], decoded: -1 }).slot;
+    this.runningModelCount = running?.running.filter(entry => entry.state === 'ready' || entry.state === 'starting').length ?? 0;
 
     const now = Date.now();
-    const isProcessing = this.inflightCount > 0;
-
     // Calculate speeds from aggregated deltas (stable across slot switches)
     if (this.prevTimestamp > 0) {
       const dt = (now - this.prevTimestamp) / 1000; // seconds
       if (dt > 0) {
-        const promptDelta = totalProcessedTokens - this.prevTotalProcessedTokens;
-        const genDelta = totalDecodedTokens - this.prevTotalDecodedTokens;
+        const promptDelta = stats.total_input_tokens - this.prevTotalInputTokens;
+        const genDelta = stats.total_output_tokens - this.prevTotalOutputTokens;
 
         // Prompt speed: tracks independently
         if (promptDelta > 0) {
           this.speedMetrics.promptSpeed = promptDelta / dt;
           this._promptIdleSince = 0;
-          this.outputChannel.info(`[slots] Prompt speed: ${this.speedMetrics.promptSpeed.toFixed(1)} t/s (delta: ${promptDelta} tokens in ${dt.toFixed(2)}s)`);
+          this.outputChannel.info(`[metrics] Input throughput: ${this.speedMetrics.promptSpeed.toFixed(1)} t/s`);
         } else {
           this._promptIdleSince += dt;
           if (this._promptIdleSince >= 2) {
@@ -208,34 +140,29 @@ export class SlotsMonitor {
         if (genDelta > 0) {
           this.speedMetrics.generationSpeed = genDelta / dt;
           this._genIdleSince = 0;
-          this.outputChannel.info(`[slots] Gen speed: ${this.speedMetrics.generationSpeed.toFixed(1)} t/s (delta: ${genDelta} tokens in ${dt.toFixed(2)}s)`);
+          this.outputChannel.info(`[metrics] Output throughput: ${this.speedMetrics.generationSpeed.toFixed(1)} t/s`);
         } else {
           this._genIdleSince += dt;
-          // Only clear generation speed when truly idle (no slot processing AND no gen tokens for 2s)
-          if (this._genIdleSince >= 2 && !isProcessing) {
+          if (this._genIdleSince >= 2) {
             this.speedMetrics.generationSpeed = null;
           }
         }
       }
     }
 
-    this.prevTotalProcessedTokens = totalProcessedTokens;
-    this.prevTotalDecodedTokens = totalDecodedTokens;
+    this.prevTotalInputTokens = stats.total_input_tokens;
+    this.prevTotalOutputTokens = stats.total_output_tokens;
     this.prevTimestamp = now;
 
     // activeSlot follows processing state, not speed (prevents flicker)
-    if (isProcessing) {
-      this.activeSlot = activeSlot;
-    } else if (!isProcessing && this._genIdleSince >= 2) {
-      this.activeSlot = null;
-    }
+    this.activeSlot = null;
 
     this.notify();
   }
 
   private resetTracking(): void {
-    this.prevTotalProcessedTokens = 0;
-    this.prevTotalDecodedTokens = 0;
+    this.prevTotalInputTokens = 0;
+    this.prevTotalOutputTokens = 0;
     this.prevTimestamp = 0;
     this._promptIdleSince = 0;
     this._genIdleSince = 0;
@@ -244,11 +171,11 @@ export class SlotsMonitor {
 
   private clearActiveState(): void {
     const hadState = this.activeSlot !== null
-      || this.inflightCount !== 0
+      || this.runningModelCount !== 0
       || this.speedMetrics.promptSpeed !== null
       || this.speedMetrics.generationSpeed !== null;
     this.activeSlot = null;
-    this.inflightCount = 0;
+    this.runningModelCount = 0;
     this.resetTracking();
     if (hadState) {
       this.notify();

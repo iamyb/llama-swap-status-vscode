@@ -61,16 +61,16 @@ export class DetailPanel {
   private updateContent(): void {
     const gpuStats = this.state.getAllGpuStats();
     const tokenSpeed = this.slotsMonitor.getTokenSpeed();
-    const activeSlot = this.slotsMonitor.getActiveSlot();
+    const promptSpeed = this.slotsMonitor.getPromptSpeed();
     const activeModels = this.state.getActiveModelIds();
-    const inflightCount = this.slotsMonitor.getInflightCount();
+    const runningModelCount = this.slotsMonitor.getRunningModelCount();
 
     const html = this.generateHtml({
       gpuStats,
       tokenSpeed,
-      activeSlot,
+      promptSpeed,
       activeModels,
-      inflightCount,
+      runningModelCount,
       connected: this.state.connected,
     });
 
@@ -81,14 +81,11 @@ export class DetailPanel {
   private generateHtml(data: {
     gpuStats: { temp_c: number; gpu_util_pct: number; mem_used_mb: number; mem_total_mb: number; id?: number }[];
     tokenSpeed: number | null;
-    activeSlot: { is_processing: boolean; n_prompt_tokens: number; n_prompt_tokens_processed: number; n_prompt_tokens_cache: number } | null;
+    promptSpeed: number | null;
     activeModels: string[];
-    inflightCount: number;
+    runningModelCount: number;
     connected: boolean;
   }): string {
-    const progressPercent = data.activeSlot
-      ? (data.activeSlot.n_prompt_tokens_processed / data.activeSlot.n_prompt_tokens) * 100
-      : 0;
     const webUiUrl = escapeHtml(getBaseUrl());
 
     return `<!DOCTYPE html>
@@ -196,20 +193,11 @@ export class DetailPanel {
       <span class="metric-label">Token Generation</span>
       <span class="metric-value" style="color: ${data.tokenSpeed !== null ? '#4ec9b0' : '#808080'}">${data.tokenSpeed !== null ? `${data.tokenSpeed.toFixed(1)} t/s` : 'Idle'}</span>
     </div>
-    ${data.activeSlot ? `
-      <div class="metric">
-        <span class="metric-label">Processed Tokens</span>
-        <span class="metric-value">${data.activeSlot.n_prompt_tokens_processed} / ${data.activeSlot.n_prompt_tokens}</span>
-      </div>
-      <div class="metric">
-        <span class="metric-label">Cached Tokens</span>
-        <span class="metric-value">${data.activeSlot.n_prompt_tokens_cache}</span>
-      </div>
-      <div class="progress-bar">
-        <div class="progress-fill" style="width: ${progressPercent}%"></div>
-      </div>
-    ` : ''}
-    <div style="font-size: 0.85em; color: #808080; margin-top: 8px;">💡 Speed shown during active processing</div>
+    <div class="metric">
+      <span class="metric-label">Input Throughput</span>
+      <span class="metric-value" style="color: ${data.promptSpeed !== null ? '#4ec9b0' : '#808080'}">${data.promptSpeed !== null ? `${data.promptSpeed.toFixed(1)} t/s` : 'Idle'}</span>
+    </div>
+    <div style="font-size: 0.85em; color: #808080; margin-top: 8px;">Speed is calculated from completed requests across all models.</div>
   </div>
 
   <div class="section">
@@ -219,8 +207,8 @@ export class DetailPanel {
       <span class="metric-value">${data.activeModels.length > 0 ? data.activeModels.join(', ') : 'None'}</span>
     </div>
     <div class="metric">
-      <span class="metric-label">In-flight Requests</span>
-      <span class="metric-value">${data.inflightCount}</span>
+      <span class="metric-label">Running Models</span>
+      <span class="metric-value">${data.runningModelCount}</span>
     </div>
   </div>
 

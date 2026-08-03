@@ -35,9 +35,6 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register state change callback for status bar updates
   state.onChange(() => {
-    // Update slots monitor with the first active model
-    const activeModels = state?.getActiveModelIds() || [];
-    slotsMonitor?.setModelId(activeModels[0] ?? null);
     statusBar?.update();
   });
 

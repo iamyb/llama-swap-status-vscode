@@ -94,7 +94,7 @@ export class StatusBarManager {
     }
   }
 
-  /** Update prompt processing progress item */
+  /** Update aggregate input throughput item */
   private updatePromptItem(): void {
     if (!this.state.connected) {
       this.promptItem.hide();
@@ -102,32 +102,21 @@ export class StatusBarManager {
     }
     this.promptItem.show();
 
-    const activeSlot = this.slotsMonitor.getActiveSlot();
-    if (!activeSlot) {
+    const promptSpeed = this.slotsMonitor.getPromptSpeed();
+    if (promptSpeed === null || promptSpeed === 0) {
       const promptText = '000000';
       this.promptItem.text = `$(pulse)${promptText}`;
       this.promptItem.color = '#808080';
-      this.promptItem.tooltip = new vscode.MarkdownString('No active prompt processing');
+      this.promptItem.tooltip = new vscode.MarkdownString('No completed input throughput in the latest interval');
       return;
     }
 
-    const processed = activeSlot.n_prompt_tokens_processed;
-    const total = activeSlot.n_prompt_tokens;
-    const cached = activeSlot.n_prompt_tokens_cache;
-    const generated = activeSlot.next_token?.reduce((sum, token) => sum + token.n_decoded, 0) ?? 0;
-    const processedTotal = processed + generated;
-    const percent = total > 0 ? ((processed / total) * 100).toFixed(0) : '0';
-    const promptSpeed = this.slotsMonitor.getPromptSpeed();
-
-    const promptText = `${processedTotal}`.padStart(PROMPT_FIELD_WIDTH, '0').slice(-PROMPT_FIELD_WIDTH);
+    const promptText = promptSpeed.toFixed(1).padStart(PROMPT_FIELD_WIDTH, '0').slice(-PROMPT_FIELD_WIDTH);
     this.promptItem.text = `$(pulse)${promptText}`;
     this.promptItem.color = '#4ec9b0';
     this.promptItem.tooltip = new vscode.MarkdownString(
-      `**Processed Prompt Tokens:** ${processed} / ${total} tokens (${percent}%)\n` +
-      `**Generated Tokens:** ${generated}\n` +
-      `**Total Processed Tokens:** ${processedTotal}\n` +
-      `**Cached Tokens:** ${cached}\n` +
-      `**Prompt Speed:** ${promptSpeed !== null ? `${promptSpeed.toFixed(1)} t/s` : 'N/A'}`
+      `**Aggregate Input Throughput:** ${promptSpeed.toFixed(1)} tokens/sec\n` +
+      `**Running Models:** ${this.slotsMonitor.getRunningModelCount()}`
     );
     this.promptItem.command = 'llamaSwap.openPanel';
   }
@@ -183,20 +172,14 @@ export class StatusBarManager {
       return;
     }
 
-    // Show first active model with status
-    const firstModel = this.state.models.get(activeModels[0]);
-    if (firstModel) {
-      const icon = firstModel.status === 'ready' ? '$(check)' : '$(loading~spin)';
-      const color = STATUS_COLORS[firstModel.status] || '#808080';
-      this.modelItem.text = `${icon} ${firstModel.id}`;
-      this.modelItem.color = color;
-      this.modelItem.tooltip = new vscode.MarkdownString(
-        `**Model:** ${firstModel.id}\n` +
-        `**Status:** ${firstModel.status}\n` +
-        `**In-flight requests:** ${this.slotsMonitor.getInflightCount()}`
-      );
-      this.modelItem.command = 'llamaSwap.openWebUI';
-    }
+    const runningModelCount = this.slotsMonitor.getRunningModelCount() || activeModels.length;
+    this.modelItem.text = `$(server-process) ${runningModelCount} model${runningModelCount === 1 ? '' : 's'}`;
+    this.modelItem.color = '#4ec9b0';
+    this.modelItem.tooltip = new vscode.MarkdownString(
+      `**Running models:** ${runningModelCount}\n` +
+      `**Models:** ${activeModels.join(', ')}`
+    );
+    this.modelItem.command = 'llamaSwap.openWebUI';
   }
 
   /** Update token generation speed item */
