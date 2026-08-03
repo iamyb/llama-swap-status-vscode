@@ -1,4 +1,4 @@
-import { PerformanceResponse, ActivityLogEntry, MetricsStatsResponse, SlotsResponse, ModelsResponse, RunningResponse } from './types';
+import { PerformanceResponse, ActivityLogEntry, SlotsResponse, ModelsResponse, RunningResponse } from './types';
 import { getBaseUrl } from './config';
 import { EventSource } from 'eventsource';
 
@@ -13,21 +13,6 @@ export async function fetchPerformance(): Promise<PerformanceResponse | null> {
     return await response.json() as PerformanceResponse;
   } catch (error) {
     console.error(`[llama-swap] Failed to fetch performance:`, error);
-    return null;
-  }
-}
-
-/** Fetch aggregate activity statistics across all models */
-export async function fetchMetricsStats(): Promise<MetricsStatsResponse | null> {
-  const baseUrl = getBaseUrl();
-  try {
-    const response = await fetch(`${baseUrl}/api/metrics/stats`);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    return await response.json() as MetricsStatsResponse;
-  } catch (error) {
-    console.error('[llama-swap] Failed to fetch metrics stats:', error);
     return null;
   }
 }

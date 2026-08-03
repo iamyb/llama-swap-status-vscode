@@ -32,26 +32,6 @@ export interface PerformanceResponse {
   gpu_stats: GpuStat[];
 }
 
-/** Aggregate activity statistics from /api/metrics/stats */
-export interface MetricsStatsResponse {
-  total_requests: number;
-  total_input_tokens: number;
-  total_output_tokens: number;
-  total_cache_tokens: number;
-  prompt_histogram: HistogramData | null;
-  gen_histogram: HistogramData | null;
-}
-
-export interface HistogramData {
-  bins: number[];
-  min: number;
-  max: number;
-  binSize: number;
-  p50: number;
-  p95: number;
-  p99: number;
-}
-
 /** Token metrics from activity log */
 export interface TokenMetrics {
   cache_tokens: number;
